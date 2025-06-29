@@ -3,10 +3,16 @@
 
 #include "common.h"
 
+/*
+ * Emulator Context
+ * This structure holds the state of the emulator, including whether it is
+ * paused, running, and the number of ticks that have occurred. It is used to
+ * manage the emulator's execution flow and timing.
+ */
 typedef struct {
-    int paused;
-    int running;
-    long int ticks;
+    bool paused;
+    bool running;
+    uint64_t ticks;
 } emu_context;
 
 emu_context *emu_get_context();
