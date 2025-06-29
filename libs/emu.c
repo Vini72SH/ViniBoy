@@ -19,7 +19,7 @@ static emu_context ctx;
 
 emu_context *emu_get_context() { return &ctx; }
 
-void delay(uint32_t ms) { SDL_Delay(ms); }
+void delay(uint32_t ms) { return SDL_Delay(ms); }
 
 int emu_run(int argc, char **argv) {
     if (argc < 2) {
@@ -31,8 +31,6 @@ int emu_run(int argc, char **argv) {
         printf("Failed to load ROM file: %s\n", argv[1]);
         return -2;
     }
-
-    DEBUG_PRINT("Cart Loaded..\n");
 
     SDL_Init(SDL_INIT_VIDEO);
     DEBUG_PRINT("SDL INIT\n");
@@ -53,12 +51,19 @@ int emu_run(int argc, char **argv) {
         }
 
         if (!(cpu_step())) {
-            printf("CPU Stopped\n");
-            return -3;
+            DEBUG_PRINT("CPU Stopped\n");
+            break;
         }
 
         ctx.ticks++;
     }
+
+    SDL_Quit();
+    DEBUG_PRINT("SDL QUIT\n");
+    TTF_Quit();
+    DEBUG_PRINT("TTF INIT\n");
+
+    cart_close();
 
     return 0;
 }
