@@ -207,7 +207,9 @@ static void execute() {
 
 bool cpu_step() {
     if (!(cpu_ctx.halted)) {
+#ifdef DEBUG
         uint16_t pc = cpu_ctx.regs.pc;
+#endif
         fetch_instruction();
         fetch_data();
 
