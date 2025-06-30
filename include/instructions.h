@@ -99,7 +99,7 @@ typedef enum {
     RT_PC
 } reg_type;
 
-typedef enum { CT_NONE, CT_NZ, CT_Z, CT_NC, CT_C } cond_type;
+typedef enum { CT_NONE, CT_Z, CT_NZ, CT_C, CT_NC } cond_type;
 
 /*
  * Struct Instruction
@@ -113,6 +113,8 @@ typedef struct {
     uint8_t param;
 } instruction;
 
-instruction *instruction_by_opcode(uint8_t opcode);
+char* instr_name(in_type type);
+
+instruction* instruction_by_opcode(uint8_t opcode);
 
 #endif  // INSTRUCTIONS_H

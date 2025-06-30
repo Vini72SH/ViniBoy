@@ -168,7 +168,7 @@ bool cart_load(const char *cart) {
         x = x - cart_ctx.rom_data[i] - 1;
     }
 
-    DEBUG_PRINT("\t Checksum: %2.2X (%s)\n", cart_ctx.header->checksum,
+    DEBUG_PRINT("\t Checksum : %2.2X (%s)\n", cart_ctx.header->checksum,
                 (x & 0xFF) ? "PASSED" : "FAILED");
 
     return true;

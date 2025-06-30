@@ -32,6 +32,10 @@ int emu_run(int argc, char **argv) {
         return -2;
     }
 
+    emu_ctx.paused = false;
+    emu_ctx.running = true;
+    emu_ctx.ticks = 0;
+
     SDL_Init(SDL_INIT_VIDEO);
     DEBUG_PRINT("SDL INIT\n");
     TTF_Init();
@@ -68,6 +72,4 @@ int emu_run(int argc, char **argv) {
     return 0;
 }
 
-void emu_cycles(int cpu_cycles) {
-    // TODO
-}
+void emu_cycles(int cpu_cycles) { emu_ctx.ticks += cpu_cycles; }

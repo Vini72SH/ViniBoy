@@ -4,6 +4,16 @@
 #include "common.h"
 #include "instructions.h"
 
+#define CPU_FLAG_Z BIT(ctx->regs.f, 7)
+#define CPU_FLAG_SUBTRACT BIT(ctx->regs.f, 6)
+#define CPU_FLAG_HALF_CARRY BIT(ctx->regs.f, 5)
+#define CPU_FLAG_CARRY BIT(ctx->regs.f, 4)
+
+#define CPU_SET_FLAG_Z(on) BIT_SET(ctx->regs.f, 7, on)
+#define CPU_SET_FLAG_N(on) BIT_SET(ctx->regs.f, 6, on)
+#define CPU_SET_FLAG_H(on) BIT_SET(ctx->regs.f, 5, on)
+#define CPU_SET_FLAG_C(on) BIT_SET(ctx->regs.f, 4, on)
+
 /*
  * CPU registers and flags
  * a: Accumulator
@@ -41,10 +51,17 @@ typedef struct {
     bool halted;
     bool stepping;
     bool dest_is_mem;
+    bool int_master_enabled;
 } cpu_context;
+
+typedef void (*IN_PROC)(cpu_context*);
+
+void cpu_set_flags(cpu_context* ctx, bool z, bool n, bool h, bool c);
 
 void cpu_init();
 
 bool cpu_step();
+
+IN_PROC inst_get_processor(in_type type);
 
 #endif  // CPU_H
