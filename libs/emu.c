@@ -15,9 +15,9 @@
  * | Timer |
  */
 
-static emu_context ctx;
+static emu_context emu_ctx;
 
-emu_context *emu_get_context() { return &ctx; }
+emu_context *emu_get_context() { return &emu_ctx; }
 
 void delay(uint32_t ms) { return SDL_Delay(ms); }
 
@@ -39,13 +39,13 @@ int emu_run(int argc, char **argv) {
 
     cpu_init();
 
-    ctx.running = true;
-    ctx.paused = false;
-    ctx.ticks = 0;
+    emu_ctx.running = true;
+    emu_ctx.paused = false;
+    emu_ctx.ticks = 0;
 
     // Dijkstra probably hates me
-    while (ctx.running) {
-        if (ctx.paused) {
+    while (emu_ctx.running) {
+        if (emu_ctx.paused) {
             delay(10);
             continue;
         }
@@ -55,7 +55,7 @@ int emu_run(int argc, char **argv) {
             break;
         }
 
-        ctx.ticks++;
+        emu_ctx.ticks++;
     }
 
     SDL_Quit();
@@ -66,4 +66,8 @@ int emu_run(int argc, char **argv) {
     cart_close();
 
     return 0;
+}
+
+void emu_cycles(int cpu_cycles) {
+    // TODO
 }

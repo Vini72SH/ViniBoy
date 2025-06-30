@@ -1,7 +1,8 @@
 #include "../include/cart.h"
 
-static cart_context ctx;
+static cart_context cart_ctx;
 
+// ROM Types
 static const char *ROM_TYPES[] = {
 
     "ROM ONLY",
@@ -42,6 +43,7 @@ static const char *ROM_TYPES[] = {
 
 };
 
+// License Codes
 static const char *LIC_CODE[0xA5] = {
 
     [0x00] = "None",
@@ -108,75 +110,82 @@ static const char *LIC_CODE[0xA5] = {
 };
 
 const char *cart_type_name() {
-    if (ctx.header->cartridge_type <= 0x22) {
-        return ROM_TYPES[ctx.header->cartridge_type];
+    if (cart_ctx.header->cartridge_type <= 0x22) {
+        return ROM_TYPES[cart_ctx.header->cartridge_type];
     }
 
     return "UNKNOWN";
 }
 
 const char *cart_lic_name() {
-    if (ctx.header->new_lic_code <= 0xA4) {
-        return LIC_CODE[ctx.header->lic_code];
+    if (cart_ctx.header->new_lic_code <= 0xA4) {
+        return LIC_CODE[cart_ctx.header->lic_code];
     }
 
     return "UNKNOWN";
 }
 
 bool cart_load(const char *cart) {
-    snprintf(ctx.filename, sizeof(ctx.filename), "%s", cart);
+    snprintf(cart_ctx.filename, sizeof(cart_ctx.filename), "%s", cart);
 
+    // Open the game cartridge
     FILE *fp = fopen(cart, "r");
     if (!(fp)) {
         printf("Failed to open: %s\n", cart);
         return false;
     }
 
-    DEBUG_PRINT("Opened: %s\n", ctx.filename);
+    DEBUG_PRINT("Opened: %s\n", cart_ctx.filename);
 
+    // Sets the size of ROM
     fseek(fp, 0, SEEK_END);
-    ctx.rom_size = ftell(fp);
+    cart_ctx.rom_size = ftell(fp);
 
     rewind(fp);
 
-    ctx.rom_data = malloc(ctx.rom_size);
-    fread(ctx.rom_data, ctx.rom_size, 1, fp);
+    // Copy ROM to rom_data
+    cart_ctx.rom_data = malloc(cart_ctx.rom_size);
+    fread(cart_ctx.rom_data, cart_ctx.rom_size, 1, fp);
     fclose(fp);
 
-    ctx.header = (rom_header *)(ctx.rom_data + 0x100);
-    ctx.header->title[15] = 0;
+    // Defines the start pointer of the Header
+    cart_ctx.header = (rom_header *)(cart_ctx.rom_data + 0x100);
+    cart_ctx.header->title[15] = 0;
 
     DEBUG_PRINT("CARTRDIGE LOADED:\n");
-    DEBUG_PRINT("\t Title    : %s\n", ctx.header->title);
-    DEBUG_PRINT("\t Type     : %2.2X (%s)\n", ctx.header->cartridge_type,
+    DEBUG_PRINT("\t Title    : %s\n", cart_ctx.header->title);
+    DEBUG_PRINT("\t Type     : %2.2X (%s)\n", cart_ctx.header->cartridge_type,
                 cart_type_name());
-    DEBUG_PRINT("\t ROM Size : %d KB\n", 32 << ctx.header->rom_size);
-    DEBUG_PRINT("\t RAM Size : %2.2X\n", ctx.header->ram_size);
-    DEBUG_PRINT("\t LIC Code : %2.2X (%s)\n", ctx.header->lic_code,
+    DEBUG_PRINT("\t ROM Size : %d KB\n", 32 << cart_ctx.header->rom_size);
+    DEBUG_PRINT("\t RAM Size : %2.2X\n", cart_ctx.header->ram_size);
+    DEBUG_PRINT("\t LIC Code : %2.2X (%s)\n", cart_ctx.header->lic_code,
                 cart_lic_name());
-    DEBUG_PRINT("\t ROM Vers : %2.2X\n", ctx.header->version);
+    DEBUG_PRINT("\t ROM Vers : %2.2X\n", cart_ctx.header->version);
 
+    // Calculate Checksum
     uint16_t x = 0;
     for (uint16_t i = 0x0134; i <= 0x014C; i++) {
-        x = x - ctx.rom_data[i] - 1;
+        x = x - cart_ctx.rom_data[i] - 1;
     }
 
-    DEBUG_PRINT("\t Checksum: %2.2X (%s)\n", ctx.header->checksum,
+    DEBUG_PRINT("\t Checksum: %2.2X (%s)\n", cart_ctx.header->checksum,
                 (x & 0xFF) ? "PASSED" : "FAILED");
-
-    DEBUG_PRINT("Cart Loaded\n");
 
     return true;
 }
 
 bool cart_close() {
-    if (ctx.rom_data) {
-        free(ctx.rom_data);
-        ctx.rom_data = NULL;
-        ctx.rom_size = 0;
-        ctx.header = NULL;
+    // Close the cart, freeing memory
+    if (cart_ctx.rom_data) {
+        free(cart_ctx.rom_data);
+        cart_ctx.rom_data = NULL;
+        cart_ctx.rom_size = 0;
+        cart_ctx.header = NULL;
     }
 
-    DEBUG_PRINT("Cart Closed\n");
     return true;
 }
+
+uint8_t cart_read(uint16_t addr) { return cart_ctx.rom_data[addr]; }
+
+void cart_write(uint16_t addr, uint8_t value) { NO_IMPL }

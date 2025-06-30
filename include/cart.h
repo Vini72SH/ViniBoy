@@ -3,6 +3,9 @@
 
 #include "common.h"
 
+/*
+ * Struct to represent the ROM header of a Game
+ */
 typedef struct {
     uint8_t entry[4];
     uint8_t nintendo_logo[48];
@@ -20,6 +23,11 @@ typedef struct {
     uint16_t global_checksum;
 } rom_header;
 
+/*
+ * Struct to represent the cartridge context
+ * This includes the filename, ROM size, ROM data, and header information.
+ * The ROM data is dynamically allocated based on the size of the ROM.
+ */
 typedef struct {
     char filename[1024];
     uint32_t rom_size;
@@ -28,6 +36,11 @@ typedef struct {
 } cart_context;
 
 bool cart_load(const char *cart);
+
+uint8_t cart_read(uint16_t addr);
+
+void cart_write(uint16_t addr, uint8_t value);
+
 bool cart_close();
 
 #endif  // CART_H
