@@ -15,11 +15,11 @@
  * | Timer |
  */
 
-static emu_context ctx;
+static emu_context emu_ctx;
 
-emu_context *emu_get_context() { return &ctx; }
+emu_context *emu_get_context() { return &emu_ctx; }
 
-void delay(uint32_t ms) { SDL_Delay(ms); }
+void delay(uint32_t ms) { return SDL_Delay(ms); }
 
 int emu_run(int argc, char **argv) {
     if (argc < 2) {
@@ -32,8 +32,6 @@ int emu_run(int argc, char **argv) {
         return -2;
     }
 
-    DEBUG_PRINT("Cart Loaded..\n");
-
     SDL_Init(SDL_INIT_VIDEO);
     DEBUG_PRINT("SDL INIT\n");
     TTF_Init();
@@ -41,24 +39,35 @@ int emu_run(int argc, char **argv) {
 
     cpu_init();
 
-    ctx.running = true;
-    ctx.paused = false;
-    ctx.ticks = 0;
+    emu_ctx.running = true;
+    emu_ctx.paused = false;
+    emu_ctx.ticks = 0;
 
     // Dijkstra probably hates me
-    while (ctx.running) {
-        if (ctx.paused) {
+    while (emu_ctx.running) {
+        if (emu_ctx.paused) {
             delay(10);
             continue;
         }
 
         if (!(cpu_step())) {
-            printf("CPU Stopped\n");
-            return -3;
+            DEBUG_PRINT("CPU Stopped\n");
+            break;
         }
 
-        ctx.ticks++;
+        emu_ctx.ticks++;
     }
 
+    SDL_Quit();
+    DEBUG_PRINT("SDL QUIT\n");
+    TTF_Quit();
+    DEBUG_PRINT("TTF INIT\n");
+
+    cart_close();
+
     return 0;
+}
+
+void emu_cycles(int cpu_cycles) {
+    // TODO
 }

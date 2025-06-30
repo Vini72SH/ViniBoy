@@ -19,4 +19,6 @@ emu_context *emu_get_context();
 
 int emu_run(int argc, char **argv);
 
+void emu_cycles(int cpu_cycles);
+
 #endif  // EMU_H

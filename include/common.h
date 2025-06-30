@@ -22,6 +22,12 @@
 /* Tells if a is between b and c */
 #define BETWEEN(a, b, c) ((a >= b) && (a <= c))
 
+#define NO_IMPL                                   \
+    {                                             \
+        fprintf(stderr, "NOT YET IMPLEMENTED\n"); \
+        exit(EXIT_FAILURE);                       \
+    }
+
 void delay(uint32_t ms);
 
 #endif  // COMMON_H
