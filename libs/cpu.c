@@ -6,6 +6,11 @@
 cpu_context cpu_ctx = {0};
 
 /*
+ * Reverse n
+ */
+uint16_t reverse(uint16_t n) { return ((n & 0xFF00) >> 8) | ((n & 0xFF << 8)); }
+
+/*
  * Set the flags in register f
  */
 void cpu_set_flags(cpu_context *ctx, bool z, bool n, bool h, bool c) {
@@ -13,6 +18,97 @@ void cpu_set_flags(cpu_context *ctx, bool z, bool n, bool h, bool c) {
     CPU_SET_FLAG_N(n);
     CPU_SET_FLAG_H(h);
     CPU_SET_FLAG_C(c);
+}
+
+/*
+ * Returns the value of the register
+ */
+uint16_t cpu_read_reg(reg_type rt) {
+    switch (rt) {
+        case RT_NONE:
+            return 0;
+        case RT_A:
+            return cpu_ctx.regs.a;
+        case RT_F:
+            return cpu_ctx.regs.f;
+        case RT_B:
+            return cpu_ctx.regs.b;
+        case RT_C:
+            return cpu_ctx.regs.c;
+        case RT_D:
+            return cpu_ctx.regs.d;
+        case RT_E:
+            return cpu_ctx.regs.e;
+        case RT_H:
+            return cpu_ctx.regs.h;
+        case RT_L:
+            return cpu_ctx.regs.l;
+        case RT_AF:
+            return reverse(*((uint16_t *)&cpu_ctx.regs.a));
+        case RT_BC:
+            return reverse(*((uint16_t *)&cpu_ctx.regs.b));
+        case RT_DE:
+            return reverse(*((uint16_t *)&cpu_ctx.regs.d));
+        case RT_HL:
+            return reverse(*((uint16_t *)&cpu_ctx.regs.h));
+        case RT_SP:
+            return cpu_ctx.regs.sp;
+        case RT_PC:
+            return cpu_ctx.regs.pc;
+    }
+    return 0;
+}
+
+/*
+ * Sets the value in register
+ */
+void cpu_set_reg(reg_type rt, uint16_t value) {
+    switch (rt) {
+        case RT_NONE:
+            break;
+        case RT_A:
+            cpu_ctx.regs.a = value & 0xFF;
+            break;
+        case RT_F:
+            cpu_ctx.regs.f = value & 0xFF;
+            break;
+        case RT_B:
+            cpu_ctx.regs.b = value & 0xFF;
+            break;
+        case RT_C:
+            cpu_ctx.regs.c = value & 0xFF;
+            break;
+        case RT_D:
+            cpu_ctx.regs.d = value & 0xFF;
+            break;
+        case RT_E:
+            cpu_ctx.regs.e = value & 0xFF;
+            break;
+        case RT_H:
+            cpu_ctx.regs.h = value & 0xFF;
+            break;
+        case RT_L:
+            cpu_ctx.regs.l = value & 0xFF;
+            break;
+        case RT_AF:
+            *((uint16_t *)&cpu_ctx.regs.a) = reverse(value);
+            break;
+        case RT_BC:
+            *((uint16_t *)&cpu_ctx.regs.b) = reverse(value);
+            break;
+        case RT_DE:
+            *((uint16_t *)&cpu_ctx.regs.d) = reverse(value);
+            break;
+        case RT_HL:
+            *((uint16_t *)&cpu_ctx.regs.h) = reverse(value);
+            break;
+        case RT_SP:
+            cpu_ctx.regs.sp = value & 0xFF;
+            break;
+        case RT_PC:
+            cpu_ctx.regs.pc = value & 0xFF;
+            break;
+    }
 }
 
 /*
@@ -43,7 +139,36 @@ void proc_none(cpu_context *ctx) { exit(EXIT_FAILURE); }
 void proc_nop(cpu_context *ctx) {}
 
 void proc_ld(cpu_context *ctx) {
-    // TODO
+    if (cpu_ctx.dest_is_mem) {
+        if (cpu_ctx.cur_inst->reg_2 >= RT_AF) {
+            // Data has more than 8 bits
+            emu_cycles(1);
+            bus_write16(ctx->mem_dest, ctx->fetched_data);
+        } else {
+            bus_write(ctx->mem_dest, ctx->fetched_data);
+        }
+
+        return;
+    }
+
+    if (cpu_ctx.cur_inst->mode == AM_HL_SPR) {
+        // Special Case
+        bool hflag = (cpu_read_reg(cpu_ctx.cur_inst->reg_2) & 0xF) +
+                         (cpu_ctx.fetched_data & 0xF) >=
+                     0x10;
+        bool cflag = (cpu_read_reg(cpu_ctx.cur_inst->reg_2) & 0xFF) +
+                         (cpu_ctx.fetched_data & 0xFF) >=
+                     0x100;
+
+        cpu_set_flags(ctx, 0, 0, hflag, cflag);
+        cpu_set_reg(ctx->cur_inst->reg_1, cpu_read_reg(ctx->cur_inst->reg_2) +
+                                              (char)ctx->fetched_data);
+
+        return;
+    }
+
+    // Only writes the data in register
+    cpu_set_reg(cpu_ctx.cur_inst->reg_1, cpu_ctx.fetched_data);
 }
 
 void proc_xor(cpu_context *ctx) {
@@ -103,91 +228,200 @@ void cpu_init() {
 };
 
 /*
- * Reverse n
- */
-uint16_t reverse(uint16_t n) { return ((n & 0xFF00) >> 8) | ((n & 0xFF << 8)); }
-
-/*
- * Returns the value of the register
- */
-uint16_t cpu_read_reg(reg_type rt) {
-    switch (rt) {
-        case RT_NONE:
-            return 0;
-        case RT_A:
-            return cpu_ctx.regs.a;
-        case RT_F:
-            return cpu_ctx.regs.f;
-        case RT_B:
-            return cpu_ctx.regs.b;
-        case RT_C:
-            return cpu_ctx.regs.c;
-        case RT_D:
-            return cpu_ctx.regs.d;
-        case RT_E:
-            return cpu_ctx.regs.e;
-        case RT_H:
-            return cpu_ctx.regs.h;
-        case RT_L:
-            return cpu_ctx.regs.l;
-        case RT_AF:
-            return reverse(*((uint16_t *)&cpu_ctx.regs.a));
-        case RT_BC:
-            return reverse(*((uint16_t *)&cpu_ctx.regs.b));
-        case RT_DE:
-            return reverse(*((uint16_t *)&cpu_ctx.regs.d));
-        case RT_HL:
-            return reverse(*((uint16_t *)&cpu_ctx.regs.h));
-        case RT_SP:
-            return cpu_ctx.regs.sp;
-        case RT_PC:
-            return cpu_ctx.regs.pc;
-    }
-    return 0;
-}
-
-/*
  * Instruction Fetch
  */
 void fetch_instruction() {
+    // Read the address and get the opcode
     cpu_ctx.cur_opcode = bus_read(cpu_ctx.regs.pc++);
+    // Translate the opcode into instruction
     cpu_ctx.cur_inst = instruction_by_opcode(cpu_ctx.cur_opcode);
 }
 
 void fetch_data() {
     if (cpu_ctx.cur_inst == NULL) return;
 
+    uint16_t hi, lo, addr;
     cpu_ctx.mem_dest = 0;
     cpu_ctx.dest_is_mem = false;
 
     switch (cpu_ctx.cur_inst->mode) {
         case AM_IMP:
-            return;
+            // Nothing
+            break;
 
-        case AM_R:
-            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_1);
-            return;
-
-        case AM_R_D8:
-            cpu_ctx.fetched_data = bus_read(cpu_ctx.regs.pc);
-            emu_cycles(1);
-            cpu_ctx.regs.pc++;
-            return;
-
-        case AM_D16: {
-            uint16_t lo = bus_read(cpu_ctx.regs.pc);
+        case AM_R_D16:
+        case AM_D16:
+            // Read the next 2 bytes
+            lo = bus_read(cpu_ctx.regs.pc);
             emu_cycles(1);
 
-            uint16_t hi = bus_read(cpu_ctx.regs.pc + 1);
+            hi = bus_read(cpu_ctx.regs.pc + 1);
             emu_cycles(1);
 
             cpu_ctx.fetched_data = lo | (hi << 8);
 
             cpu_ctx.regs.pc += 2;
+            break;
 
-            return;
-        }
+        case AM_R_R:
+            // Only read the reg2 data
+            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_2);
+            break;
 
+        case AM_MR_R:
+            // Read the reg2 data and calculates the destination address in
+            // memory
+            cpu_ctx.dest_is_mem = true;
+            cpu_ctx.mem_dest = cpu_read_reg(cpu_ctx.cur_inst->reg_1);
+            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_2);
+
+            // Special case
+            if (cpu_ctx.cur_inst->reg_1 == RT_C) {
+                cpu_ctx.mem_dest |= 0xFF00;
+            }
+
+            break;
+
+        case AM_R:
+            // Only read the reg1 data
+            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_1);
+            break;
+
+        case AM_R_D8:
+            // Read the next byte
+            cpu_ctx.fetched_data = bus_read(cpu_ctx.regs.pc);
+            emu_cycles(1);
+            cpu_ctx.regs.pc++;
+            break;
+
+        case AM_R_MR:
+            // Takes the memory address stored in a register and loads the data
+            // from this address
+            addr = cpu_read_reg(cpu_ctx.cur_inst->reg_2);
+
+            // Special case
+            if (cpu_ctx.cur_inst->reg_1 == RT_C) {
+                addr |= 0xFF00;
+            }
+
+            cpu_ctx.fetched_data = bus_read(addr);
+            emu_cycles(1);
+            break;
+
+        case AM_R_HLI:
+            // Reads data from the register and increments it
+            cpu_ctx.fetched_data =
+                bus_read(cpu_read_reg(cpu_ctx.cur_inst->reg_2));
+            emu_cycles(1);
+            cpu_set_reg(RT_HL, cpu_read_reg(RT_HL) + 1);
+            break;
+
+        case AM_R_HLD:
+            // Reads data from the register and decrements it
+            cpu_ctx.fetched_data =
+                bus_read(cpu_read_reg(cpu_ctx.cur_inst->reg_2));
+            emu_cycles(1);
+            cpu_set_reg(RT_HL, cpu_read_reg(RT_HL) - 1);
+            break;
+
+        case AM_HLI_R:
+            // Reads the data from the register, calculates the destination
+            // address and increments it
+            cpu_ctx.dest_is_mem = true;
+            cpu_ctx.mem_dest = cpu_read_reg(cpu_ctx.cur_inst->reg_1);
+            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_2);
+            cpu_set_reg(RT_HL, cpu_read_reg(RT_HL) + 1);
+            break;
+
+        case AM_HLD_R:
+            // Reads the data from the register, calculates the destination
+            // address and decrements it
+            cpu_ctx.dest_is_mem = true;
+            cpu_ctx.mem_dest = cpu_read_reg(cpu_ctx.cur_inst->reg_1);
+            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_2);
+            cpu_set_reg(RT_HL, cpu_read_reg(RT_HL) - 1);
+            break;
+
+        case AM_R_A8:
+            // Read the next byte
+            cpu_ctx.fetched_data = bus_read(cpu_ctx.regs.pc);
+            emu_cycles(1);
+            cpu_ctx.regs.pc++;
+            break;
+
+        case AM_A8_R:
+            // Read the data from register
+            cpu_ctx.dest_is_mem = true;
+            cpu_ctx.mem_dest = bus_read(cpu_ctx.regs.pc) | 0xFF00;
+            emu_cycles(1);
+            cpu_ctx.regs.pc++;
+            break;
+
+        case AM_HL_SPR:
+            // Read the next byte
+            cpu_ctx.fetched_data = bus_read(cpu_ctx.regs.pc);
+            emu_cycles(1);
+            cpu_ctx.regs.pc++;
+            break;
+
+        case AM_A16_R:
+        case AM_D16_R:
+            // Read the data from register and calculates the destination
+            // address
+            lo = bus_read(cpu_ctx.regs.pc);
+            emu_cycles(1);
+
+            hi = bus_read(cpu_ctx.regs.pc + 1);
+            emu_cycles(1);
+
+            cpu_ctx.dest_is_mem = true;
+            cpu_ctx.mem_dest = lo | (hi << 8);
+
+            cpu_ctx.regs.pc += 2;
+
+            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_2);
+            break;
+
+        case AM_D8:
+            // Read the next byte
+            cpu_ctx.fetched_data = bus_read(cpu_ctx.regs.pc);
+            emu_cycles(1);
+            cpu_ctx.regs.pc++;
+            break;
+
+        case AM_MR_D8:
+            // Read the next byte and get the destination address from register
+            cpu_ctx.fetched_data = bus_read(cpu_ctx.regs.pc);
+            emu_cycles(1);
+            cpu_ctx.regs.pc++;
+
+            cpu_ctx.dest_is_mem = true;
+            cpu_ctx.mem_dest = cpu_read_reg(cpu_ctx.cur_inst->reg_1);
+            break;
+
+        case AM_MR:
+            // The destination address and the read address are the same
+            cpu_ctx.dest_is_mem = true;
+            cpu_ctx.mem_dest = cpu_read_reg(cpu_ctx.cur_inst->reg_1);
+            cpu_ctx.fetched_data =
+                bus_read(cpu_read_reg(cpu_ctx.cur_inst->reg_1));
+            emu_cycles(1);
+            break;
+
+        case AM_R_A16:
+            // Read the next 2 bytes and get data from 16-bit address
+            lo = bus_read(cpu_ctx.regs.pc);
+            emu_cycles(1);
+
+            hi = bus_read(cpu_ctx.regs.pc + 1);
+            emu_cycles(1);
+
+            addr = lo | (hi << 8);
+            cpu_ctx.regs.pc += 2;
+
+            cpu_ctx.fetched_data = bus_read(addr);
+            emu_cycles(1);
+            break;
         default:
             DEBUG_PRINT("Unknown Addressing Mode: %d\n",
                         cpu_ctx.cur_inst->mode);
