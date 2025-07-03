@@ -5,6 +5,10 @@
 
 cpu_context cpu_ctx = {0};
 
+uint8_t cpu_get_inter_reg() { return cpu_ctx.inter_reg; }
+
+void cpu_set_inter_reg(uint8_t value) { cpu_ctx.inter_reg = value; }
+
 /*
  * Reverse n
  */
@@ -183,6 +187,16 @@ void proc_jp(cpu_context *ctx) {
     }
 }
 
+void proc_ldh(cpu_context *ctx) {
+    if (ctx->cur_inst->reg_1 == RT_A) {
+        cpu_set_reg(RT_A, bus_read(0xFF00 | ctx->fetched_data));
+    } else {
+        bus_write(ctx->mem_dest, ctx->fetched_data);
+    }
+
+    emu_cycles(1);
+}
+
 void proc_di(cpu_context *ctx) { ctx->int_master_enabled = false; }
 
 /*
@@ -201,7 +215,7 @@ static IN_PROC processors[] = {
     [IN_XOR] = proc_xor,   [IN_OR] = NULL,      [IN_CP] = NULL,
     [IN_POP] = NULL,       [IN_JP] = proc_jp,   [IN_PUSH] = NULL,
     [IN_RET] = NULL,       [IN_CB] = NULL,      [IN_CALL] = NULL,
-    [IN_RETI] = NULL,      [IN_LDH] = NULL,     [IN_JPHL] = NULL,
+    [IN_RETI] = NULL,      [IN_LDH] = proc_ldh, [IN_JPHL] = NULL,
     [IN_DI] = proc_di,     [IN_EI] = NULL,      [IN_RST] = NULL,
     [IN_ERR] = NULL,       [IN_RLC] = NULL,     [IN_RRC] = NULL,
     [IN_RL] = NULL,        [IN_RR] = NULL,      [IN_SLA] = NULL,
@@ -351,6 +365,7 @@ void fetch_data() {
 
         case AM_A8_R:
             // Read the data from register
+            cpu_ctx.fetched_data = cpu_read_reg(cpu_ctx.cur_inst->reg_2);
             cpu_ctx.dest_is_mem = true;
             cpu_ctx.mem_dest = bus_read(cpu_ctx.regs.pc) | 0xFF00;
             emu_cycles(1);

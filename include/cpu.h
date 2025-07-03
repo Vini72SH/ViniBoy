@@ -42,19 +42,24 @@ typedef struct {
  * stepping states.
  */
 typedef struct {
-    uint8_t cur_opcode;
-    uint16_t fetched_data;
-    uint16_t mem_dest;
-    cpu_registers regs;
-    instruction* cur_inst;
+    uint8_t inter_reg;     /* Interrupt Enable register */
+    uint8_t cur_opcode;    /* The current opcode */
+    uint16_t fetched_data; /* Data fetched from memory */
+    uint16_t mem_dest;     /* Memory destination for the current operation */
+    cpu_registers regs;    /* CPU registers */
+    instruction* cur_inst; /* Current instruction being executed */
 
-    bool halted;
-    bool stepping;
-    bool dest_is_mem;
-    bool int_master_enabled;
+    bool halted;   /* Indicates if the CPU is halted */
+    bool stepping; /* Indicates if the CPU is stepping through instructions */
+    bool dest_is_mem; /* Indicates if the memory destination is a mem address */
+    bool int_master_enabled; /* Indicates if the interrupt master is enabled */
 } cpu_context;
 
 typedef void (*IN_PROC)(cpu_context*);
+
+uint8_t cpu_get_inter_reg();
+
+void cpu_set_inter_reg(uint8_t value);
 
 void cpu_set_flags(cpu_context* ctx, bool z, bool n, bool h, bool c);
 
