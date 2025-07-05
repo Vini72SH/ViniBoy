@@ -2,10 +2,13 @@
 
 #include "../include/bus.h"
 #include "../include/emu.h"
+#include "../include/stack.h"
 
 cpu_context cpu_ctx = {0};
 
 uint8_t cpu_get_inter_reg() { return cpu_ctx.inter_reg; }
+
+cpu_registers *cpu_get_regs() { return &cpu_ctx.regs; }
 
 void cpu_set_inter_reg(uint8_t value) { cpu_ctx.inter_reg = value; }
 
@@ -138,6 +141,18 @@ bool check_cond(cpu_context *ctx) {
     return false;
 }
 
+void goto_addr(cpu_context *ctx, uint16_t addr, bool pushpc) {
+    if (check_cond(ctx)) {
+        if (pushpc) {
+            emu_cycles(2);
+            stack_push16(ctx->regs.pc);
+        }
+    }
+
+    ctx->regs.pc = addr;
+    emu_cycles(1);
+}
+
 void proc_none(cpu_context *ctx) { exit(EXIT_FAILURE); }
 
 void proc_nop(cpu_context *ctx) {}
@@ -175,16 +190,71 @@ void proc_ld(cpu_context *ctx) {
     cpu_set_reg(cpu_ctx.cur_inst->reg_1, cpu_ctx.fetched_data);
 }
 
+void proc_jr(cpu_context *ctx) {
+    char relative = (char)(ctx->fetched_data & 0xFF);
+    uint16_t addr = ctx->regs.pc + relative;
+    goto_addr(ctx, addr, false);
+}
+
 void proc_xor(cpu_context *ctx) {
     ctx->regs.a ^= (ctx->fetched_data & 0xFF);
     cpu_set_flags(ctx, ctx->regs.a, 0, 0, 0);
 }
 
-void proc_jp(cpu_context *ctx) {
-    if (check_cond(&cpu_ctx)) {
-        cpu_ctx.regs.pc = ctx->fetched_data;
+void proc_pop(cpu_context *ctx) {
+    uint16_t lo = stack_pop();
+    emu_cycles(1);
+    uint16_t hi = stack_pop();
+    emu_cycles(1);
+
+    uint16_t data = lo | (hi << 8);
+
+    cpu_set_reg(ctx->cur_inst->reg_1, data);
+
+    if (ctx->cur_inst->reg_1 == RT_AF) {
+        cpu_set_reg(ctx->cur_inst->reg_1, data & 0xFFF0);
+    }
+}
+
+void proc_jp(cpu_context *ctx) { goto_addr(ctx, ctx->fetched_data, false); }
+
+void proc_push(cpu_context *ctx) {
+    uint16_t hi, lo;
+
+    hi = (cpu_read_reg(ctx->cur_inst->reg_1) >> 8) & 0xFF;
+    emu_cycles(1);
+    stack_push(hi);
+
+    lo = cpu_read_reg(ctx->cur_inst->reg_1) & 0xFF;
+    emu_cycles(1);
+    stack_push(lo);
+
+    emu_cycles(1);
+}
+
+void proc_ret(cpu_context *ctx) {
+    uint16_t hi, lo, addr;
+
+    if (ctx->cur_inst->cond != CT_NONE) {
         emu_cycles(1);
     }
+
+    if (check_cond(ctx)) {
+        lo = stack_pop();
+        emu_cycles(1);
+        hi = stack_pop();
+        emu_cycles(1);
+
+        addr = lo | (hi << 8);
+        ctx->regs.pc = addr;
+    }
+}
+
+void proc_call(cpu_context *ctx) { goto_addr(ctx, ctx->fetched_data, true); }
+
+void proc_reti(cpu_context *ctx) {
+    ctx->int_master_enabled = true;
+    proc_ret(ctx);
 }
 
 void proc_ldh(cpu_context *ctx) {
@@ -199,6 +269,8 @@ void proc_ldh(cpu_context *ctx) {
 
 void proc_di(cpu_context *ctx) { ctx->int_master_enabled = false; }
 
+void proc_rst(cpu_context *ctx) { goto_addr(ctx, ctx->cur_inst->param, true); }
+
 /*
  * Function Pointer Map
  * It contains the reference to the Software functions that will emulate the
@@ -208,15 +280,15 @@ static IN_PROC processors[] = {
     [IN_NONE] = proc_none, [IN_NOP] = proc_nop, [IN_LD] = proc_ld,
     [IN_INC] = NULL,       [IN_DEC] = NULL,     [IN_RLCA] = NULL,
     [IN_ADD] = NULL,       [IN_RRCA] = NULL,    [IN_STOP] = NULL,
-    [IN_RLA] = NULL,       [IN_JR] = NULL,      [IN_RRA] = NULL,
+    [IN_RLA] = NULL,       [IN_JR] = proc_jr,   [IN_RRA] = NULL,
     [IN_DAA] = NULL,       [IN_CPL] = NULL,     [IN_SCF] = NULL,
     [IN_CCF] = NULL,       [IN_HALT] = NULL,    [IN_ADC] = NULL,
     [IN_SUB] = NULL,       [IN_SBC] = NULL,     [IN_AND] = NULL,
     [IN_XOR] = proc_xor,   [IN_OR] = NULL,      [IN_CP] = NULL,
-    [IN_POP] = NULL,       [IN_JP] = proc_jp,   [IN_PUSH] = NULL,
-    [IN_RET] = NULL,       [IN_CB] = NULL,      [IN_CALL] = NULL,
-    [IN_RETI] = NULL,      [IN_LDH] = proc_ldh, [IN_JPHL] = NULL,
-    [IN_DI] = proc_di,     [IN_EI] = NULL,      [IN_RST] = NULL,
+    [IN_POP] = proc_pop,   [IN_JP] = proc_jp,   [IN_PUSH] = proc_push,
+    [IN_RET] = proc_ret,   [IN_CB] = NULL,      [IN_CALL] = proc_call,
+    [IN_RETI] = proc_reti, [IN_LDH] = proc_ldh, [IN_JPHL] = NULL,
+    [IN_DI] = proc_di,     [IN_EI] = NULL,      [IN_RST] = proc_rst,
     [IN_ERR] = NULL,       [IN_RLC] = NULL,     [IN_RRC] = NULL,
     [IN_RL] = NULL,        [IN_RR] = NULL,      [IN_SLA] = NULL,
     [IN_SRA] = NULL,       [IN_SWAP] = NULL,    [IN_SRL] = NULL,
@@ -239,6 +311,7 @@ void cpu_init() {
     cpu_ctx.stepping = true;
     cpu_ctx.dest_is_mem = false;
     cpu_ctx.regs.pc = 0x100;
+    cpu_ctx.regs.sp = 0xDFFF;
 };
 
 /*

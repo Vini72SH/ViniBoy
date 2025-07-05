@@ -58,6 +58,7 @@ typedef struct {
 typedef void (*IN_PROC)(cpu_context*);
 
 uint8_t cpu_get_inter_reg();
+cpu_registers* cpu_get_regs();
 
 void cpu_set_inter_reg(uint8_t value);
 
