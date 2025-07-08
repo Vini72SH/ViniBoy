@@ -190,6 +190,55 @@ void proc_ld(cpu_context *ctx) {
     cpu_set_reg(cpu_ctx.cur_inst->reg_1, cpu_ctx.fetched_data);
 }
 
+void proc_inc(cpu_context *ctx) {
+    bool z, n, h, c;
+    uint16_t data = cpu_read_reg(ctx->cur_inst->reg_1);
+
+    if (ctx->cur_inst->reg_1 == RT_HL && ctx->cur_inst->mode == AM_MR) {
+        data = bus_read(cpu_read_reg(RT_HL)) + 1;
+        data &= 0xFF;
+        bus_write(cpu_read_reg(RT_HL), data);
+    } else {
+        data++;
+        cpu_set_reg(ctx->cur_inst->reg_1, data);
+    }
+
+    if ((ctx->cur_opcode & 0x03) != 0x03) {
+        emu_cycles(1);
+        return;
+    }
+
+    z = (data == 0);
+    n = 0;
+    h = (data & 0x0F) == 0;
+    c = CPU_FLAG_CARRY;
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
+void proc_dec(cpu_context *ctx) {
+    bool z, n, h, c;
+    uint16_t data = cpu_read_reg(ctx->cur_inst->reg_1);
+
+    if ((ctx->cur_inst->reg_1 == RT_HL) && (ctx->cur_inst->mode == AM_MR)) {
+        data = bus_read(cpu_read_reg(RT_HL)) - 1;
+        bus_write(cpu_read_reg(RT_HL), data);
+    } else {
+        data--;
+        cpu_set_reg(ctx->cur_inst->reg_1, data);
+    }
+
+    if ((ctx->cur_opcode & 0x0B) != 0x0B) {
+        emu_cycles(1);
+        return;
+    }
+
+    z = (data == 0);
+    n = 1;
+    h = (data & 0x0F) == 0x0F;
+    c = CPU_FLAG_CARRY;
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
 void proc_jr(cpu_context *ctx) {
     char relative = (char)(ctx->fetched_data & 0xFF);
     uint16_t addr = ctx->regs.pc + relative;
@@ -278,7 +327,7 @@ void proc_rst(cpu_context *ctx) { goto_addr(ctx, ctx->cur_inst->param, true); }
  */
 static IN_PROC processors[] = {
     [IN_NONE] = proc_none, [IN_NOP] = proc_nop, [IN_LD] = proc_ld,
-    [IN_INC] = NULL,       [IN_DEC] = NULL,     [IN_RLCA] = NULL,
+    [IN_INC] = proc_inc,   [IN_DEC] = proc_dec, [IN_RLCA] = NULL,
     [IN_ADD] = NULL,       [IN_RRCA] = NULL,    [IN_STOP] = NULL,
     [IN_RLA] = NULL,       [IN_JR] = proc_jr,   [IN_RRA] = NULL,
     [IN_DAA] = NULL,       [IN_CPL] = NULL,     [IN_SCF] = NULL,
