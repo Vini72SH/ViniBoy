@@ -239,10 +239,89 @@ void proc_dec(cpu_context *ctx) {
     cpu_set_flags(ctx, z, n, h, c);
 }
 
+void proc_add(cpu_context *ctx) {
+    bool z, n, h, c;
+    uint32_t data = cpu_read_reg(ctx->cur_inst->reg_1);
+
+    if (ctx->cur_inst->reg_1 == RT_SP) {
+        data += (char)ctx->fetched_data;
+    } else {
+        data += ctx->fetched_data;
+    }
+
+    if (ctx->cur_inst->reg_1 >= RT_AF) {
+        emu_cycles(1);
+        z = (ctx->cur_inst->reg_1 == RT_SP) ? 0 : CPU_FLAG_Z;
+        n = 0;
+        h = (ctx->cur_inst->reg_1 == RT_SP) ? ((data & 0xFF) > 0x0F)
+                                            : ((data & 0xFFFF) >= 0x1000);
+        c = (ctx->cur_inst->reg_1 == RT_SP) ? (data > 0xFF) : ((data > 0xFFFF));
+    } else {
+        z = (data == 0);
+        n = 0;
+        h = (data & 0xFF) > 0x0F;
+        c = (data > 0xFF);
+    }
+
+    cpu_set_reg(ctx->cur_inst->reg_1, data & 0xFFFF);
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
 void proc_jr(cpu_context *ctx) {
     char relative = (char)(ctx->fetched_data & 0xFF);
     uint16_t addr = ctx->regs.pc + relative;
     goto_addr(ctx, addr, false);
+}
+
+void proc_adc(cpu_context *ctx) {
+    bool z, n, h, c;
+    uint16_t data, reg, c_flag;
+
+    data = ctx->fetched_data;
+    reg = ctx->cur_inst->reg_1;
+    c_flag = CPU_FLAG_CARRY;
+
+    data += reg + c_flag;
+
+    z = (data == 0);
+    n = 0;
+    h = (data & 0xFF) > 0x0F;
+    c = (data > 0xFF);
+
+    cpu_set_reg(ctx->cur_inst->reg_1, data);
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
+void proc_sub(cpu_context *ctx) {
+    bool z, n, h, c;
+    uint16_t data, reg;
+    reg = cpu_read_reg(ctx->cur_inst->reg_1);
+    data = ctx->fetched_data;
+
+    z = (reg - data == 0);
+    n = 1;
+    h = (((int)(reg & 0xF) - (int)(data & 0xF)) < 0);
+    c = (((int)reg - (int)data) < 0);
+
+    data = reg - data;
+    cpu_set_reg(ctx->cur_inst->reg_1, data);
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
+void proc_sbc(cpu_context *ctx) {
+    bool z, n, h, c;
+    uint16_t data, reg;
+    reg = cpu_read_reg(ctx->cur_inst->reg_1);
+    data = ctx->fetched_data + CPU_FLAG_CARRY;
+
+    z = (reg - data == 0);
+    n = 1;
+    h = (((int)(reg & 0xF) - (int)(data & 0xF)) < 0);
+    c = (((int)reg - (int)data) < 0);
+
+    data = reg - data;
+    cpu_set_reg(ctx->cur_inst->reg_1, data);
+    cpu_set_flags(ctx, z, n, h, c);
 }
 
 void proc_xor(cpu_context *ctx) {
@@ -328,11 +407,11 @@ void proc_rst(cpu_context *ctx) { goto_addr(ctx, ctx->cur_inst->param, true); }
 static IN_PROC processors[] = {
     [IN_NONE] = proc_none, [IN_NOP] = proc_nop, [IN_LD] = proc_ld,
     [IN_INC] = proc_inc,   [IN_DEC] = proc_dec, [IN_RLCA] = NULL,
-    [IN_ADD] = NULL,       [IN_RRCA] = NULL,    [IN_STOP] = NULL,
+    [IN_ADD] = proc_add,   [IN_RRCA] = NULL,    [IN_STOP] = NULL,
     [IN_RLA] = NULL,       [IN_JR] = proc_jr,   [IN_RRA] = NULL,
     [IN_DAA] = NULL,       [IN_CPL] = NULL,     [IN_SCF] = NULL,
-    [IN_CCF] = NULL,       [IN_HALT] = NULL,    [IN_ADC] = NULL,
-    [IN_SUB] = NULL,       [IN_SBC] = NULL,     [IN_AND] = NULL,
+    [IN_CCF] = NULL,       [IN_HALT] = NULL,    [IN_ADC] = proc_adc,
+    [IN_SUB] = proc_sub,   [IN_SBC] = proc_sbc, [IN_AND] = NULL,
     [IN_XOR] = proc_xor,   [IN_OR] = NULL,      [IN_CP] = NULL,
     [IN_POP] = proc_pop,   [IN_JP] = proc_jp,   [IN_PUSH] = proc_push,
     [IN_RET] = proc_ret,   [IN_CB] = NULL,      [IN_CALL] = proc_call,
