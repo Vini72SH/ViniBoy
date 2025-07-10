@@ -2,6 +2,7 @@
 
 #include "../include/bus.h"
 #include "../include/emu.h"
+#include "../include/interrupts.h"
 #include "../include/stack.h"
 
 cpu_context cpu_ctx = {0};
@@ -11,6 +12,10 @@ uint8_t cpu_get_inter_reg() { return cpu_ctx.inter_reg; }
 cpu_registers *cpu_get_regs() { return &cpu_ctx.regs; }
 
 void cpu_set_inter_reg(uint8_t value) { cpu_ctx.inter_reg = value; }
+
+uint8_t cpu_get_int_flags() { return cpu_ctx.int_flags; }
+
+void cpu_set_int_flags(uint8_t flags) { cpu_ctx.int_flags = flags; }
 
 /*
  * Reverse n
@@ -312,6 +317,15 @@ void proc_dec(cpu_context *ctx) {
     cpu_set_flags(ctx, z, n, h, c);
 }
 
+void proc_rlca(cpu_context *ctx) {
+    uint8_t data = cpu_read_reg8(RT_A);
+    bool c = BIT(data, 7);
+    data = (data << 1) | c;
+    cpu_set_reg(RT_A, data);
+
+    cpu_set_flags(ctx, 0, 0, 0, c);
+}
+
 void proc_add(cpu_context *ctx) {
     bool z, n, h, c;
     uint32_t data = cpu_read_reg(ctx->cur_inst->reg_1);
@@ -340,11 +354,100 @@ void proc_add(cpu_context *ctx) {
     cpu_set_flags(ctx, z, n, h, c);
 }
 
+void proc_rrca(cpu_context *ctx) {
+    uint8_t data = cpu_read_reg8(RT_A);
+    uint8_t b = (data & 1);
+    data = (data >> 1) | (b << 7);
+    cpu_set_reg(RT_A, data);
+
+    cpu_set_flags(ctx, 0, 0, 0, b);
+}
+
+void proc_stop(cpu_context *ctx) {
+    DEBUG_PRINT("STOPPING\n");
+    NO_IMPL
+}
+
+void proc_rla(cpu_context *ctx) {
+    uint8_t data = cpu_read_reg8(RT_A);
+    uint8_t cf = CPU_FLAG_CARRY;
+    uint8_t c = (data >> 7) & 1;
+
+    cpu_set_reg(RT_A, (data << 1) | cf);
+    cpu_set_flags(ctx, 0, 0, 0, c);
+}
+
 void proc_jr(cpu_context *ctx) {
     char relative = (char)(ctx->fetched_data & 0xFF);
     uint16_t addr = ctx->regs.pc + relative;
     goto_addr(ctx, addr, false);
 }
+
+void proc_rra(cpu_context *ctx) {
+    uint8_t data = cpu_read_reg(RT_A);
+    uint8_t c = CPU_FLAG_CARRY;
+    uint8_t new_c = data & 1;
+
+    data >>= 1;
+    data |= (c << 7);
+    cpu_set_flags(ctx, 0, 0, 0, new_c);
+}
+
+void proc_daa(cpu_context *ctx) {
+    int fc = 0;
+    uint8_t reg_a, u = 0;
+
+    reg_a = cpu_read_reg(RT_A);
+    if ((CPU_FLAG_HALF_CARRY) || (!CPU_FLAG_SUBTRACT && (reg_a & 0xF) > 9)) {
+        u = 6;
+    }
+
+    if ((CPU_FLAG_CARRY) || (!CPU_FLAG_SUBTRACT && (reg_a > 0x99))) {
+        u |= 0x60;
+        fc = 1;
+    }
+
+    reg_a += (CPU_FLAG_SUBTRACT) ? -u : u;
+    cpu_set_reg(RT_A, reg_a);
+    cpu_set_flags(ctx, reg_a == 0, CPU_FLAG_SUBTRACT, 0, fc);
+}
+
+void proc_cpl(cpu_context *ctx) {
+    bool z, n, h, c;
+    uint8_t data = ~(cpu_read_reg(RT_A));
+
+    z = CPU_FLAG_Z;
+    n = CPU_FLAG_SUBTRACT;
+    h = CPU_FLAG_HALF_CARRY;
+    c = CPU_FLAG_CARRY;
+
+    cpu_set_reg(RT_A, data);
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
+void proc_scf(cpu_context *ctx) {
+    bool z, n, h, c;
+
+    z = CPU_FLAG_Z;
+    n = 0;
+    h = 0;
+    c = 1;
+
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
+void proc_ccf(cpu_context *ctx) {
+    bool z, n, h, c;
+
+    z = CPU_FLAG_Z;
+    n = 0;
+    h = 0;
+    c = CPU_FLAG_CARRY ^ 1;
+
+    cpu_set_flags(ctx, z, n, h, c);
+}
+
+void proc_halt(cpu_context *ctx) { ctx->halted = true; }
 
 void proc_adc(cpu_context *ctx) {
     bool z, n, h, c;
@@ -592,6 +695,8 @@ void proc_ldh(cpu_context *ctx) {
 
 void proc_di(cpu_context *ctx) { ctx->int_master_enabled = false; }
 
+void proc_ei(cpu_context *ctx) { ctx->enabling_ime = true; }
+
 void proc_rst(cpu_context *ctx) { goto_addr(ctx, ctx->cur_inst->param, true); }
 
 /*
@@ -600,22 +705,22 @@ void proc_rst(cpu_context *ctx) { goto_addr(ctx, ctx->cur_inst->param, true); }
  * Assembly instructions
  */
 static IN_PROC processors[] = {
-    [IN_NONE] = proc_none, [IN_NOP] = proc_nop, [IN_LD] = proc_ld,
-    [IN_INC] = proc_inc,   [IN_DEC] = proc_dec, [IN_RLCA] = NULL,
-    [IN_ADD] = proc_add,   [IN_RRCA] = NULL,    [IN_STOP] = NULL,
-    [IN_RLA] = NULL,       [IN_JR] = proc_jr,   [IN_RRA] = NULL,
-    [IN_DAA] = NULL,       [IN_CPL] = NULL,     [IN_SCF] = NULL,
-    [IN_CCF] = NULL,       [IN_HALT] = NULL,    [IN_ADC] = proc_adc,
-    [IN_SUB] = proc_sub,   [IN_SBC] = proc_sbc, [IN_AND] = proc_and,
-    [IN_XOR] = proc_xor,   [IN_OR] = proc_or,   [IN_CP] = proc_cp,
-    [IN_POP] = proc_pop,   [IN_JP] = proc_jp,   [IN_PUSH] = proc_push,
-    [IN_RET] = proc_ret,   [IN_CB] = proc_cb,   [IN_CALL] = proc_call,
-    [IN_RETI] = proc_reti, [IN_LDH] = proc_ldh, [IN_JPHL] = NULL,
-    [IN_DI] = proc_di,     [IN_EI] = NULL,      [IN_RST] = proc_rst,
-    [IN_ERR] = NULL,       [IN_RLC] = NULL,     [IN_RRC] = NULL,
-    [IN_RL] = NULL,        [IN_RR] = NULL,      [IN_SLA] = NULL,
-    [IN_SRA] = NULL,       [IN_SWAP] = NULL,    [IN_SRL] = NULL,
-    [IN_BIT] = NULL,       [IN_RES] = NULL,     [IN_SET] = NULL};
+    [IN_NONE] = proc_none, [IN_NOP] = proc_nop,   [IN_LD] = proc_ld,
+    [IN_INC] = proc_inc,   [IN_DEC] = proc_dec,   [IN_RLCA] = proc_rlca,
+    [IN_ADD] = proc_add,   [IN_RRCA] = proc_rrca, [IN_STOP] = proc_stop,
+    [IN_RLA] = proc_rla,   [IN_JR] = proc_jr,     [IN_RRA] = proc_rra,
+    [IN_DAA] = proc_daa,   [IN_CPL] = proc_cpl,   [IN_SCF] = proc_scf,
+    [IN_CCF] = proc_ccf,   [IN_HALT] = proc_halt, [IN_ADC] = proc_adc,
+    [IN_SUB] = proc_sub,   [IN_SBC] = proc_sbc,   [IN_AND] = proc_and,
+    [IN_XOR] = proc_xor,   [IN_OR] = proc_or,     [IN_CP] = proc_cp,
+    [IN_POP] = proc_pop,   [IN_JP] = proc_jp,     [IN_PUSH] = proc_push,
+    [IN_RET] = proc_ret,   [IN_CB] = proc_cb,     [IN_CALL] = proc_call,
+    [IN_RETI] = proc_reti, [IN_LDH] = proc_ldh,   [IN_JPHL] = NULL,
+    [IN_DI] = proc_di,     [IN_EI] = proc_ei,     [IN_RST] = proc_rst,
+    [IN_ERR] = NULL,       [IN_RLC] = NULL,       [IN_RRC] = NULL,
+    [IN_RL] = NULL,        [IN_RR] = NULL,        [IN_SLA] = NULL,
+    [IN_SRA] = NULL,       [IN_SWAP] = NULL,      [IN_SRL] = NULL,
+    [IN_BIT] = NULL,       [IN_RES] = NULL,       [IN_SET] = NULL};
 
 /*
  * Returns the pointer to the function corresponding to the type of the
@@ -868,6 +973,21 @@ bool cpu_step() {
                     instr_name(cpu_ctx.cur_inst->type), cpu_ctx.cur_opcode);
 
         execute();
+    } else {
+        emu_cycles(1);
+
+        if (cpu_ctx.int_flags) {
+            cpu_ctx.halted = false;
+        }
+    }
+
+    if (cpu_ctx.int_master_enabled) {
+        cpu_handle_interrupts(&cpu_ctx);
+        cpu_ctx.enabling_ime = false;
+    }
+
+    if (cpu_ctx.enabling_ime) {
+        cpu_ctx.int_master_enabled = true;
     }
 
     return true;

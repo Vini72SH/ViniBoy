@@ -53,6 +53,8 @@ typedef struct {
     bool stepping; /* Indicates if the CPU is stepping through instructions */
     bool dest_is_mem; /* Indicates if the memory destination is a mem address */
     bool int_master_enabled; /* Indicates if the interrupt master is enabled */
+    bool enabling_ime; /* Indicates if the interrupt master is being enabled */
+    uint8_t int_flags; /* Interrupt flags */
 } cpu_context;
 
 typedef void (*IN_PROC)(cpu_context*);
@@ -60,6 +62,10 @@ typedef void (*IN_PROC)(cpu_context*);
 uint8_t cpu_get_inter_reg();
 
 cpu_registers* cpu_get_regs();
+
+uint8_t cpu_get_int_flags();
+
+void cpu_set_int_flags(uint8_t flags);
 
 void cpu_set_inter_reg(uint8_t value);
 

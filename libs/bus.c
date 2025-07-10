@@ -40,14 +40,16 @@ uint8_t bus_read(uint16_t addr) {
     } else if (addr < 0xFEA0) {
         // OAM
         // TODO
-        NO_IMPL
+        // NO_IMPL
+        return 0;
     } else if (addr < 0xFF00) {
         // Reserved Unusable
         return 0;
     } else if (addr < 0xFF80) {
         // IO Registers
         // TODO
-        NO_IMPL
+        // NO_IMPL
+        return 0;
     } else if (addr == 0xFFFF) {
         return cpu_get_inter_reg();
     }
@@ -63,7 +65,7 @@ void bus_write(uint16_t addr, uint8_t value) {
     } else if (addr < 0xA000) {
         // Char / Map Data
         // TODO
-        NO_IMPL
+        // NO_IMPL
     } else if (addr < 0xC000) {
         // EXT-RAM
         cart_write(addr, value);
@@ -73,19 +75,19 @@ void bus_write(uint16_t addr, uint8_t value) {
     } else if (addr < 0xFE00) {
         // Reserved Echo Ram
         // TODO
-        NO_IMPL
+        // NO_IMPL
     } else if (addr < 0xFEA0) {
         // OAM
         // Todo
-        NO_IMPL
+        // NO_IMPL
     } else if (addr < 0xFF00) {
         // Reserved Unusable
         // TODO
-        NO_IMPL
+        // NO_IMPL
     } else if (addr < 0xFF80) {
         // I0 Registers
         // TODO
-        NO_IMPL
+        // NO_IMPL
     } else if (addr == 0xFFFF) {
         cpu_set_inter_reg(value);
     } else {

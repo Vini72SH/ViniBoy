@@ -13,6 +13,7 @@ typedef struct {
     bool paused;
     bool running;
     uint64_t ticks;
+    bool stop;
 } emu_context;
 
 emu_context *emu_get_context();
