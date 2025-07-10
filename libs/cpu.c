@@ -27,6 +27,18 @@ void cpu_set_flags(cpu_context *ctx, bool z, bool n, bool h, bool c) {
     CPU_SET_FLAG_C(c);
 }
 
+reg_type rt_lookup[] = {
+    RT_B, RT_C, RT_D, RT_E, RT_H, RT_L, RT_HL, RT_A,
+};
+
+reg_type decode_reg(uint8_t reg) {
+    if (reg > 0b111) {
+        return RT_NONE;
+    }
+
+    return rt_lookup[reg];
+}
+
 /*
  * Returns the value of the register
  */
@@ -118,6 +130,67 @@ void cpu_set_reg(reg_type rt, uint16_t value) {
     }
 }
 
+uint8_t cpu_read_reg8(reg_type rt) {
+    switch (rt) {
+        case RT_A:
+            return cpu_ctx.regs.a;
+        case RT_F:
+            return cpu_ctx.regs.f;
+        case RT_B:
+            return cpu_ctx.regs.b;
+        case RT_C:
+            return cpu_ctx.regs.c;
+        case RT_D:
+            return cpu_ctx.regs.d;
+        case RT_E:
+            return cpu_ctx.regs.e;
+        case RT_H:
+            return cpu_ctx.regs.h;
+        case RT_L:
+            return cpu_ctx.regs.l;
+        case RT_HL: {
+            return bus_read(cpu_read_reg(RT_HL));
+        }
+        default:
+            DEBUG_PRINT("**ERR INVALID REG8: %d\n", rt);
+            NO_IMPL
+    }
+}
+
+void cpu_set_reg8(reg_type rt, uint8_t value) {
+    switch (rt) {
+        case RT_A:
+            cpu_ctx.regs.a = value & 0xFF;
+            break;
+        case RT_F:
+            cpu_ctx.regs.f = value & 0xFF;
+            break;
+        case RT_B:
+            cpu_ctx.regs.b = value & 0xFF;
+            break;
+        case RT_C:
+            cpu_ctx.regs.c = value & 0xFF;
+            break;
+        case RT_D:
+            cpu_ctx.regs.d = value & 0xFF;
+            break;
+        case RT_E:
+            cpu_ctx.regs.e = value & 0xFF;
+            break;
+        case RT_H:
+            cpu_ctx.regs.h = value & 0xFF;
+            break;
+        case RT_L:
+            cpu_ctx.regs.l = value & 0xFF;
+            break;
+        case RT_HL:
+            bus_write(cpu_read_reg(RT_HL), value);
+            break;
+        default:
+            DEBUG_PRINT("**ERR INVALID REG8: %d\n", rt);
+            NO_IMPL
+    }
+}
 /*
  * Checks the condition of the jump
  */
@@ -324,9 +397,27 @@ void proc_sbc(cpu_context *ctx) {
     cpu_set_flags(ctx, z, n, h, c);
 }
 
+void proc_and(cpu_context *ctx) {
+    ctx->regs.a &= ctx->fetched_data;
+    cpu_set_flags(ctx, ctx->regs.a == 0, 0, 1, 0);
+}
+
 void proc_xor(cpu_context *ctx) {
     ctx->regs.a ^= (ctx->fetched_data & 0xFF);
-    cpu_set_flags(ctx, ctx->regs.a, 0, 0, 0);
+    cpu_set_flags(ctx, ctx->regs.a == 0, 0, 0, 0);
+}
+
+void proc_or(cpu_context *ctx) {
+    ctx->regs.a |= (ctx->fetched_data & 0xFF);
+    cpu_set_flags(ctx, ctx->regs.a == 0, 0, 0, 0);
+}
+
+void proc_cp(cpu_context *ctx) {
+    int data = (int)ctx->regs.a - (int)ctx->fetched_data;
+    cpu_set_flags(
+        ctx, data == 0, 1,
+        ((int)ctx->regs.a & 0x0F) - ((int)ctx->fetched_data & 0x0F) < 0,
+        data < 0);
 }
 
 void proc_pop(cpu_context *ctx) {
@@ -378,6 +469,110 @@ void proc_ret(cpu_context *ctx) {
     }
 }
 
+void proc_cb(cpu_context *ctx) {
+    bool c, setC;
+    uint8_t old, result;
+    uint8_t op = ctx->fetched_data;
+    reg_type reg = decode_reg(op & 0b111);
+    uint8_t bit = (op >> 3) & 0b111;
+    uint8_t bit_op = (op >> 6) & 0b11;
+    uint8_t reg_val = cpu_read_reg(reg);
+
+    emu_cycles(1);
+
+    if (reg == RT_HL) {
+        emu_cycles(2);
+    }
+
+    c = CPU_FLAG_CARRY;
+    switch (bit_op) {
+        case 1:
+            // BIT
+            cpu_set_flags(ctx, !(BIT(reg, bit)), 0, 1, c);
+            return;
+
+        case 2:
+            // RST
+            BIT_SET(reg, bit, 0);
+            return;
+
+        case 3:
+            // SET
+            BIT_SET(reg, bit, 1);
+            return;
+    }
+
+    switch (bit) {
+        case 0:
+            // RLC
+            setC = false;
+            result = (reg_val << 1) & 0xFF;
+
+            if (BIT(reg_val, 7) != 0) {
+                result |= 1;
+                setC = true;
+            }
+
+            cpu_set_reg8(reg, result);
+            cpu_set_flags(&cpu_ctx, result == 0, 0, 0, setC);
+            return;
+        case 1:
+            // RRC
+            old = reg_val;
+            reg_val >>= 1;
+            reg_val |= BIT(old, 7);
+
+            cpu_set_reg8(reg, reg_val);
+            cpu_set_flags(&cpu_ctx, !(reg_val), 0, 0, old & 1);
+            return;
+        case 2:
+            // RL
+            old = reg_val;
+            reg_val <<= 1;
+            reg_val |= c;
+            cpu_set_reg8(reg, reg_val);
+            cpu_set_flags(&cpu_ctx, !(reg_val), 0, 0, !!(old & 0x80));
+            return;
+        case 3:
+            // RR
+            old = reg_val;
+            reg_val >>= 1;
+            reg_val |= (c << 7);
+            cpu_set_reg8(reg, reg_val);
+            cpu_set_flags(&cpu_ctx, !(reg_val), 0, 0, old & 1);
+            return;
+        case 4:
+            // SLA
+            old = reg_val;
+            reg_val <<= 1;
+
+            cpu_set_reg8(reg, reg_val);
+            cpu_set_flags(&cpu_ctx, !(reg_val), 0, 0, !!(old & 0x80));
+            return;
+        case 5:
+            // SRA
+            old = (int8_t)reg_val >> 1;
+            cpu_set_reg8(reg, old);
+            cpu_set_flags(&cpu_ctx, !(old), 0, 0, reg_val & 1);
+            return;
+        case 6:
+            // SWAP
+            reg_val = ((reg_val & 0xF0) >> 4) | ((reg_val & 0x0F) << 4);
+            cpu_set_reg8(reg, reg_val);
+            cpu_set_flags(&cpu_ctx, reg_val == 0, 0, 0, 0);
+            return;
+        case 7:
+            // SRL
+            old = reg_val >> 1;
+            cpu_set_reg8(reg, old);
+            cpu_set_flags(&cpu_ctx, !(old), 0, 0, reg_val & 1);
+            return;
+    }
+
+    DEBUG_PRINT("ERROR: INVALID CB: %02X\n", op);
+    NO_IMPL
+}
+
 void proc_call(cpu_context *ctx) { goto_addr(ctx, ctx->fetched_data, true); }
 
 void proc_reti(cpu_context *ctx) {
@@ -411,10 +606,10 @@ static IN_PROC processors[] = {
     [IN_RLA] = NULL,       [IN_JR] = proc_jr,   [IN_RRA] = NULL,
     [IN_DAA] = NULL,       [IN_CPL] = NULL,     [IN_SCF] = NULL,
     [IN_CCF] = NULL,       [IN_HALT] = NULL,    [IN_ADC] = proc_adc,
-    [IN_SUB] = proc_sub,   [IN_SBC] = proc_sbc, [IN_AND] = NULL,
-    [IN_XOR] = proc_xor,   [IN_OR] = NULL,      [IN_CP] = NULL,
+    [IN_SUB] = proc_sub,   [IN_SBC] = proc_sbc, [IN_AND] = proc_and,
+    [IN_XOR] = proc_xor,   [IN_OR] = proc_or,   [IN_CP] = proc_cp,
     [IN_POP] = proc_pop,   [IN_JP] = proc_jp,   [IN_PUSH] = proc_push,
-    [IN_RET] = proc_ret,   [IN_CB] = NULL,      [IN_CALL] = proc_call,
+    [IN_RET] = proc_ret,   [IN_CB] = proc_cb,   [IN_CALL] = proc_call,
     [IN_RETI] = proc_reti, [IN_LDH] = proc_ldh, [IN_JPHL] = NULL,
     [IN_DI] = proc_di,     [IN_EI] = NULL,      [IN_RST] = proc_rst,
     [IN_ERR] = NULL,       [IN_RLC] = NULL,     [IN_RRC] = NULL,
