@@ -17,7 +17,13 @@
 #define BIT(a, n) ((a & (a << n)) ? 1 : 0)
 
 /* Set bit n of a to on or off */
-#define BIT_SET(a, n, on) (on ? a |= (1 << n) : a &= ~(1 << n))
+#define BIT_SET(a, n, on)       \
+    do {                        \
+        if (on)                 \
+            (a) |= (1 << (n));  \
+        else                    \
+            (a) &= ~(1 << (n)); \
+    } while (0)
 
 /* Tells if a is between b and c */
 #define BETWEEN(a, b, c) ((a >= b) && (a <= c))

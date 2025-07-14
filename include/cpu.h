@@ -4,6 +4,16 @@
 #include "common.h"
 #include "instructions.h"
 
+#define CPU_FLAG_Z BIT(ctx->regs.f, 7)
+#define CPU_FLAG_SUBTRACT BIT(ctx->regs.f, 6)
+#define CPU_FLAG_HALF_CARRY BIT(ctx->regs.f, 5)
+#define CPU_FLAG_CARRY BIT(ctx->regs.f, 4)
+
+#define CPU_SET_FLAG_Z(on) BIT_SET(ctx->regs.f, 7, on)
+#define CPU_SET_FLAG_N(on) BIT_SET(ctx->regs.f, 6, on)
+#define CPU_SET_FLAG_H(on) BIT_SET(ctx->regs.f, 5, on)
+#define CPU_SET_FLAG_C(on) BIT_SET(ctx->regs.f, 4, on)
+
 /*
  * CPU registers and flags
  * a: Accumulator
@@ -32,19 +42,47 @@ typedef struct {
  * stepping states.
  */
 typedef struct {
-    uint8_t cur_opcode;
-    uint16_t fetched_data;
-    uint16_t mem_dest;
-    cpu_registers regs;
-    instruction* cur_inst;
+    uint8_t inter_reg;     /* Interrupt Enable register */
+    uint8_t cur_opcode;    /* The current opcode */
+    uint16_t fetched_data; /* Data fetched from memory */
+    uint16_t mem_dest;     /* Memory destination for the current operation */
+    cpu_registers regs;    /* CPU registers */
+    instruction* cur_inst; /* Current instruction being executed */
 
-    bool halted;
-    bool stepping;
-    bool dest_is_mem;
+    bool halted;   /* Indicates if the CPU is halted */
+    bool stepping; /* Indicates if the CPU is stepping through instructions */
+    bool dest_is_mem; /* Indicates if the memory destination is a mem address */
+    bool int_master_enabled; /* Indicates if the interrupt master is enabled */
+    bool enabling_ime; /* Indicates if the interrupt master is being enabled */
+    uint8_t int_flags; /* Interrupt flags */
 } cpu_context;
+
+typedef void (*IN_PROC)(cpu_context*);
+
+uint8_t cpu_get_inter_reg();
+
+cpu_registers* cpu_get_regs();
+
+uint8_t cpu_get_int_flags();
+
+void cpu_set_int_flags(uint8_t flags);
+
+void cpu_set_inter_reg(uint8_t value);
+
+void cpu_set_flags(cpu_context* ctx, bool z, bool n, bool h, bool c);
 
 void cpu_init();
 
 bool cpu_step();
+
+uint16_t cpu_read_reg(reg_type rt);
+
+void cpu_set_reg(reg_type rt, uint16_t value);
+
+uint8_t cpu_read_reg8(reg_type rt);
+
+void cpu_set_reg8(reg_type rt, uint8_t value);
+
+IN_PROC inst_get_processor(in_type type);
 
 #endif  // CPU_H
