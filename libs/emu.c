@@ -5,6 +5,7 @@
 
 #include "../include/cart.h"
 #include "../include/cpu.h"
+#include "../include/timer.h"
 #include "../include/ui.h"
 
 /*
@@ -22,6 +23,7 @@ emu_context *emu_get_context() { return &emu_ctx; }
 
 void *cpu_run(void *p) {
     cpu_init();
+    timer_init();
 
     // Dijkstra probably hates me
     while (emu_ctx.running) {
@@ -34,8 +36,6 @@ void *cpu_run(void *p) {
             DEBUG_PRINT("CPU Stopped\n");
             break;
         }
-
-        emu_ctx.ticks++;
     }
 
     return 0;
@@ -76,4 +76,11 @@ int emu_run(int argc, char **argv) {
     return 0;
 }
 
-void emu_cycles(int cpu_cycles) { emu_ctx.ticks += cpu_cycles; }
+void emu_cycles(int cpu_cycles) {
+    int n = cpu_cycles * 4;
+
+    for (int i = 0; i < n; ++i) {
+        emu_ctx.ticks++;
+        timer_tick();
+    }
+}

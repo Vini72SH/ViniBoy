@@ -2,6 +2,7 @@
 
 #include "../include/cart.h"
 #include "../include/cpu.h"
+#include "../include/io.h"
 #include "../include/ram.h"
 
 /*
@@ -47,9 +48,7 @@ uint8_t bus_read(uint16_t addr) {
         return 0;
     } else if (addr < 0xFF80) {
         // IO Registers
-        // TODO
-        // NO_IMPL
-        return 0;
+        return io_read(addr);
     } else if (addr == 0xFFFF) {
         return cpu_get_inter_reg();
     }
@@ -86,8 +85,7 @@ void bus_write(uint16_t addr, uint8_t value) {
         // NO_IMPL
     } else if (addr < 0xFF80) {
         // I0 Registers
-        // TODO
-        // NO_IMPL
+        io_write(addr, value);
     } else if (addr == 0xFFFF) {
         cpu_set_inter_reg(value);
     } else {

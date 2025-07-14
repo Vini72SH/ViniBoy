@@ -4,6 +4,7 @@
 #include "../include/emu.h"
 #include "../include/interrupts.h"
 #include "../include/stack.h"
+#include "../include/timer.h"
 
 cpu_context cpu_ctx = {0};
 
@@ -732,14 +733,26 @@ IN_PROC inst_get_processor(in_type type) { return processors[type]; }
  * Start Address 0x100
  */
 void cpu_init() {
+    cpu_ctx.regs.pc = 0x100;
+    cpu_ctx.regs.sp = 0xDFFE;
+    *((short *)&cpu_ctx.regs.a) = 0xB001;
+    *((short *)&cpu_ctx.regs.b) = 0x1300;
+    *((short *)&cpu_ctx.regs.d) = 0xD800;
+    *((short *)&cpu_ctx.regs.h) = 0x4D01;
+
+    cpu_ctx.inter_reg = 0;
+    cpu_ctx.int_flags = 0;
+    cpu_ctx.int_master_enabled = false;
+    cpu_ctx.enabling_ime = false;
+
     cpu_ctx.cur_opcode = 0;
     cpu_ctx.fetched_data = 0;
     cpu_ctx.mem_dest = 0;
     cpu_ctx.halted = false;
     cpu_ctx.stepping = true;
     cpu_ctx.dest_is_mem = false;
-    cpu_ctx.regs.pc = 0x100;
-    cpu_ctx.regs.sp = 0xDFFF;
+
+    timer_get_context()->div = 0xABCC;
 };
 
 /*
@@ -992,3 +1005,5 @@ bool cpu_step() {
 
     return true;
 }
+
+void cpu_request_interrupt(interrupt_type type) { cpu_ctx.int_flags |= type; }
