@@ -1,6 +1,7 @@
 #include "../include/io.h"
 
 #include "../include/cpu.h"
+#include "../include/dma.h"
 #include "../include/timer.h"
 
 char serial_data[2];
@@ -44,5 +45,10 @@ void io_write(uint16_t addr, uint8_t value) {
     if (addr == 0xFF0F) {
         cpu_set_int_flags(value);
         return;
+    }
+
+    if (addr == 0xFF46) {
+        dma_start(value);
+        DEBUG_PRINT("DMA START\n");
     }
 }

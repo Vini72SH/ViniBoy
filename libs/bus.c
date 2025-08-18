@@ -2,7 +2,9 @@
 
 #include "../include/cart.h"
 #include "../include/cpu.h"
+#include "../include/dma.h"
 #include "../include/io.h"
+#include "../include/ppu.h"
 #include "../include/ram.h"
 
 /*
@@ -27,8 +29,7 @@ uint8_t bus_read(uint16_t addr) {
         return cart_read(addr);
     } else if (addr < 0xA000) {
         // Char / Map Data
-        // TODO
-        NO_IMPL
+        return ppu_vram_read(addr);
     } else if (addr < 0xC000) {
         // Cartridge Ram
         return cart_read(addr);
@@ -40,9 +41,11 @@ uint8_t bus_read(uint16_t addr) {
         return 0;
     } else if (addr < 0xFEA0) {
         // OAM
-        // TODO
-        // NO_IMPL
-        return 0;
+        if (dma_transferring()) {
+            return 0xFF;
+        }
+
+        return ppu_oam_read(addr);
     } else if (addr < 0xFF00) {
         // Reserved Unusable
         return 0;
@@ -63,8 +66,7 @@ void bus_write(uint16_t addr, uint8_t value) {
         return;
     } else if (addr < 0xA000) {
         // Char / Map Data
-        // TODO
-        // NO_IMPL
+        ppu_vram_write(addr, value);
     } else if (addr < 0xC000) {
         // EXT-RAM
         cart_write(addr, value);
@@ -77,8 +79,11 @@ void bus_write(uint16_t addr, uint8_t value) {
         // NO_IMPL
     } else if (addr < 0xFEA0) {
         // OAM
-        // Todo
-        // NO_IMPL
+        if (dma_transferring()) {
+            return;
+        }
+
+        ppu_oam_write(addr, value);
     } else if (addr < 0xFF00) {
         // Reserved Unusable
         // TODO

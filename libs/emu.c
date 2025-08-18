@@ -5,6 +5,7 @@
 
 #include "../include/cart.h"
 #include "../include/cpu.h"
+#include "../include/dma.h"
 #include "../include/timer.h"
 #include "../include/ui.h"
 
@@ -67,6 +68,7 @@ int emu_run(int argc, char **argv) {
     while (!(emu_ctx.stop)) {
         usleep(1000);
         ui_handle_events();
+        ui_update();
     }
 
     ui_exit();
@@ -77,10 +79,11 @@ int emu_run(int argc, char **argv) {
 }
 
 void emu_cycles(int cpu_cycles) {
-    int n = cpu_cycles * 4;
-
-    for (int i = 0; i < n; ++i) {
-        emu_ctx.ticks++;
-        timer_tick();
+    for (int i = 0; i < cpu_cycles; ++i) {
+        for (int n = 0; n < 4; ++n) {
+            emu_ctx.ticks++;
+            timer_tick();
+        }
+        dma_tick();
     }
 }

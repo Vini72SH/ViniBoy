@@ -13,6 +13,8 @@ void delay(uint32_t ms);
 
 void ui_init();
 
+void ui_update();
+
 void ui_handle_events();
 
 void ui_exit();
